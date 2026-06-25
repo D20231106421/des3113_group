@@ -59,7 +59,7 @@ class PasswordManagerApp extends StatelessWidget {
         cardTheme: CardThemeData(
           color: Colors.white,
           elevation: 2,
-          shadowColor: Colors.black.withOpacity(0.05),
+          shadowColor: Colors.black.withValues(alpha: 0.05),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
             side: BorderSide(color: Colors.grey.shade100, width: 1),
@@ -492,7 +492,7 @@ class _PasswordManagerScreenState extends State<PasswordManagerScreen> {
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
+                            color: Colors.black.withValues(alpha: 0.04),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
@@ -1441,261 +1441,354 @@ class _AuthGateState extends State<_AuthGate> {
           ),
         ),
         child: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF2563EB).withOpacity(0.15),
-                            blurRadius: 24,
-                            offset: const Offset(0, 8),
-                          )
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.lock_outline,
-                        size: 48,
-                        color: Color(0xFF2563EB),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                  Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF111827),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    subtitle,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: const Color(0xFF4B5563),
-                    ),
-                  ),
-                  const SizedBox(height: 28),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final screenW = constraints.maxWidth;
+              final screenH = constraints.maxHeight;
+              final isTablet = screenW >= 600;
+              final isLandscape = screenW > screenH;
 
-                  if (showUsernameField) ...[
-                    TextField(
-                      controller: _usernameController,
-                      autocorrect: false,
-                      textInputAction: TextInputAction.next,
-                      onChanged: (_) => setState(() => _errorMessage = ''),
-                      onSubmitted: (_) => _onUsernameNext(),
-                      decoration: InputDecoration(
-                        hintText: 'Username',
-                        prefixIcon: const Icon(Icons.person_outline),
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                    if (_errorMessage.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        _errorMessage,
-                        style: const TextStyle(
-                          color: Color(0xFFDC2626),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: _isProcessing ? null : () async {
-                          if (_usernameController.text.trim().isEmpty) {
-                            setState(() => _errorMessage = 'Enter your username first.');
-                            return;
-                          }
-                          setState(() => _isProcessing = true);
-                          try {
-                            final email = _usernameToEmail(_usernameController.text);
-                            // Attempt to create the user to see if it already exists
-                            final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-                              email: email,
-                              password: 'DummyPassword123!', 
-                            );
-                            // If it succeeds, the user did NOT exist.
-                            // Delete the dummy user and show the required message.
-                            await cred.user?.delete();
-                            await FirebaseAuth.instance.signOut();
-                            setState(() {
-                              _errorMessage = 'Username dont exist, please create new username';
-                              _isProcessing = false;
-                            });
-                            return;
-                          } on FirebaseAuthException catch (e) {
-                            if (e.code == 'email-already-in-use') {
-                              // User exists! We can safely proceed to the PIN pad.
-                            } else {
-                              // If there is any other error (like network issue), show it.
-                              setState(() {
-                                _errorMessage = 'Username dont exist, please create new username';
-                                _isProcessing = false;
-                              });
-                              return;
-                            }
-                          } catch (e) {
-                            setState(() {
-                              _errorMessage = 'Username dont exist, please create new username';
-                              _isProcessing = false;
-                            });
-                            return;
-                          }
-                          setState(() => _isProcessing = false);
-                          _switchToLogin();
-                        },
-                        child: _isProcessing
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text('Log in with existing account'),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: const Color(0xFF2563EB),
-                          side: const BorderSide(
-                            color: Color(0xFF2563EB),
-                            width: 1.5,
-                          ),
-                        ),
-                        onPressed: _onUsernameNext,
-                        child: const Text('Sign up with new account'),
-                      ),
-                    ),
-                  ],
+              // Responsive tweaks
+              final double iconPad = isTablet ? 24 : 18;
+              final double iconSize = isTablet ? 56 : 44;
+              final double hPad = isTablet ? 40 : 24;
+              final double dotSize = isTablet ? 18 : 14;
+              final double dotGap = isTablet ? 10 : 7;
+              final double titleGap = isLandscape ? 12 : 20;
+              final double subtitleGap = isLandscape ? 8 : 8;
+              final double belowHeaderGap = isLandscape ? 16 : 24;
+              // Pin pad: limit width so buttons aren't huge on tablet
+              final double padMaxW = isTablet ? 360 : screenW - hPad * 2;
+              // Button size: 4 rows + 3 gaps fit within available height
+              final double availH = screenH -
+                  (isLandscape ? 160 : 280); // rough header+footer height
+              final double btnSize =
+                  ((availH - 3 * 16) / 4).clamp(56.0, isTablet ? 88.0 : 76.0);
+              final double childAspect = 1.0; // square cells
 
-                  if (showPinPad) ...[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(6, (index) {
-                        final isFilled = index < _enteredPin.length;
-                        return Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 8),
-                          width: 16,
-                          height: 16,
+              return Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: isTablet ? 480 : 420),
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.symmetric(
+                        horizontal: hPad,
+                        vertical: isLandscape ? 12 : 24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // ── Lock icon ──────────────────────────────────────
+                        Container(
+                          padding: EdgeInsets.all(iconPad),
                           decoration: BoxDecoration(
+                            color: Colors.white,
                             shape: BoxShape.circle,
-                            color: isFilled
-                                ? const Color(0xFF2563EB)
-                                : const Color(0xFFCBD5E1),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF2563EB).withValues(alpha: 0.15),
+                                blurRadius: 24,
+                                offset: const Offset(0, 8),
+                              )
+                            ],
                           ),
-                        );
-                      }),
-                    ),
-                    if (_errorMessage.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        _errorMessage,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Color(0xFFDC2626),
-                          fontWeight: FontWeight.w600,
+                          child: Icon(
+                            Icons.lock_outline,
+                            size: iconSize,
+                            color: const Color(0xFF2563EB),
+                          ),
                         ),
-                      ),
-                    ] else ...[
-                      const SizedBox(height: 36),
-                    ],
-                    if (_isProcessing)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 8),
-                        child: CircularProgressIndicator(),
-                      )
-                    else
-                      Expanded(
-                        child: GridView.builder(
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            childAspectRatio: 1.5,
-                            crossAxisSpacing: 16,
-                            mainAxisSpacing: 16,
+                        SizedBox(height: titleGap),
+
+                        // ── Title ──────────────────────────────────────────
+                        Text(
+                          title,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineSmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF111827),
+                                fontSize: isTablet ? 26 : 22,
+                              ),
+                        ),
+                        SizedBox(height: subtitleGap),
+                        Text(
+                          subtitle,
+                          textAlign: TextAlign.center,
+                          style:
+                              Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                    color: const Color(0xFF4B5563),
+                                    fontSize: isTablet ? 16 : 14,
+                                  ),
+                        ),
+                        SizedBox(height: belowHeaderGap),
+
+                        // ── Username field (login mode) ────────────────────
+                        if (showUsernameField) ...[
+                          TextField(
+                            controller: _usernameController,
+                            autocorrect: false,
+                            textInputAction: TextInputAction.next,
+                            onChanged: (_) =>
+                                setState(() => _errorMessage = ''),
+                            onSubmitted: (_) => _onUsernameNext(),
+                            decoration: InputDecoration(
+                              hintText: 'Username',
+                              prefixIcon:
+                                  const Icon(Icons.person_outline),
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
                           ),
-                          itemCount: 12,
-                          itemBuilder: (context, index) {
-                            if (index == 9) return const SizedBox.shrink();
-                            if (index == 11) {
-                              return _PinButton(
-                                onPressed: _onBackspace,
-                                icon: Icons.backspace_outlined,
+                          if (_errorMessage.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              _errorMessage,
+                              style: const TextStyle(
+                                color: Color(0xFFDC2626),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 20),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton(
+                              onPressed: _isProcessing
+                                  ? null
+                                  : () async {
+                                      if (_usernameController.text
+                                          .trim()
+                                          .isEmpty) {
+                                        setState(() => _errorMessage =
+                                            'Enter your username first.');
+                                        return;
+                                      }
+                                      setState(
+                                          () => _isProcessing = true);
+                                      try {
+                                        final email = _usernameToEmail(
+                                            _usernameController.text);
+                                        // Attempt to create the user to see if it already exists
+                                        final cred = await FirebaseAuth
+                                            .instance
+                                            .createUserWithEmailAndPassword(
+                                          email: email,
+                                          password: 'DummyPassword123!',
+                                        );
+                                        // If it succeeds, the user did NOT exist.
+                                        // Delete the dummy user and show the required message.
+                                        await cred.user?.delete();
+                                        await FirebaseAuth.instance
+                                            .signOut();
+                                        setState(() {
+                                          _errorMessage =
+                                              'Username dont exist, please create new username';
+                                          _isProcessing = false;
+                                        });
+                                        return;
+                                      } on FirebaseAuthException catch (e) {
+                                        if (e.code ==
+                                            'email-already-in-use') {
+                                          // User exists! We can safely proceed to the PIN pad.
+                                        } else {
+                                          // If there is any other error (like network issue), show it.
+                                          setState(() {
+                                            _errorMessage =
+                                                'Username dont exist, please create new username';
+                                            _isProcessing = false;
+                                          });
+                                          return;
+                                        }
+                                      } catch (e) {
+                                        setState(() {
+                                          _errorMessage =
+                                              'Username dont exist, please create new username';
+                                          _isProcessing = false;
+                                        });
+                                        return;
+                                      }
+                                      setState(
+                                          () => _isProcessing = false);
+                                      _switchToLogin();
+                                    },
+                              child: _isProcessing
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Log in with existing account'),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: const Color(0xFF2563EB),
+                                side: const BorderSide(
+                                  color: Color(0xFF2563EB),
+                                  width: 1.5,
+                                ),
+                              ),
+                              onPressed: _onUsernameNext,
+                              child: const Text('Sign up with new account'),
+                            ),
+                          ),
+                        ],
+
+                        // ── PIN pad ────────────────────────────────────────
+                        if (showPinPad) ...[
+                          // PIN dots
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: List.generate(6, (index) {
+                              final isFilled =
+                                  index < _enteredPin.length;
+                              return Container(
+                                margin: EdgeInsets.symmetric(
+                                    horizontal: dotGap),
+                                width: dotSize,
+                                height: dotSize,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isFilled
+                                      ? const Color(0xFF2563EB)
+                                      : const Color(0xFFCBD5E1),
+                                ),
                               );
-                            }
-                            final number = index == 10 ? '0' : '${index + 1}';
-                            return _PinButton(
-                              onPressed: () => _onKeyPress(number),
-                              text: number,
-                            );
-                          },
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _enteredPin = '';
-                          _setupPin1 = '';
-                          _errorMessage = '';
-                          _isProcessing = false;
-                          _mode = AuthGateMode.login;
-                        });
-                      },
-                      child: const Text('← Back to username'),
+                            }),
+                          ),
+
+                          // Error message
+                          if (_errorMessage.isNotEmpty) ...[
+                            const SizedBox(height: 14),
+                            Text(
+                              _errorMessage,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Color(0xFFDC2626),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                          ] else
+                            SizedBox(height: isLandscape ? 16 : 28),
+
+                          // PIN keypad grid
+                          if (_isProcessing)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 8),
+                              child: CircularProgressIndicator(),
+                            )
+                          else
+                            Center(
+                              child: ConstrainedBox(
+                                constraints:
+                                    BoxConstraints(maxWidth: padMaxW),
+                                child: GridView.builder(
+                                  shrinkWrap: true,
+                                  physics:
+                                      const NeverScrollableScrollPhysics(),
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 3,
+                                    childAspectRatio: childAspect,
+                                    crossAxisSpacing: 12,
+                                    mainAxisSpacing: 8,
+                                    mainAxisExtent: btnSize,
+                                  ),
+                                  itemCount: 12,
+                                  itemBuilder: (context, index) {
+                                    if (index == 9) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    if (index == 11) {
+                                      return _PinButton(
+                                        onPressed: _onBackspace,
+                                        icon: Icons.backspace_outlined,
+                                        iconSize: isTablet ? 30 : 26,
+                                      );
+                                    }
+                                    final number =
+                                        index == 10 ? '0' : '${index + 1}';
+                                    return _PinButton(
+                                      onPressed: () => _onKeyPress(number),
+                                      text: number,
+                                      fontSize:
+                                          isTablet ? 34 : 28,
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+
+                          SizedBox(height: isLandscape ? 8 : 12),
+
+                          // Navigation links
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _enteredPin = '';
+                                _setupPin1 = '';
+                                _errorMessage = '';
+                                _isProcessing = false;
+                                _mode = AuthGateMode.login;
+                              });
+                            },
+                            child: const Text('← Back to username'),
+                          ),
+                          if (_mode == AuthGateMode.loggingIn)
+                            TextButton(
+                              onPressed: _switchToSignup,
+                              child:
+                                  const Text('Create a new account instead'),
+                            ),
+                          if (_mode == AuthGateMode.setupStep1 ||
+                              _mode == AuthGateMode.setupStep2)
+                            TextButton(
+                              onPressed: _switchToLogin,
+                              child: const Text(
+                                  'Already have an account? Log in'),
+                            ),
+                        ],
+                      ],
                     ),
-                    if (_mode == AuthGateMode.loggingIn)
-                      TextButton(
-                        onPressed: _switchToSignup,
-                        child: const Text('Create a new account instead'),
-                      ),
-                    if (_mode == AuthGateMode.setupStep1 || _mode == AuthGateMode.setupStep2)
-                      TextButton(
-                        onPressed: _switchToLogin,
-                        child: const Text('Already have an account? Log in'),
-                      ),
-                  ],
-                ],
-              ),
-            ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
-      ),
       ),
     );
   }
 }
 
 class _PinButton extends StatelessWidget {
-  const _PinButton({required this.onPressed, this.text, this.icon});
+  const _PinButton({
+    required this.onPressed,
+    this.text,
+    this.icon,
+    this.fontSize = 30,
+    this.iconSize = 26,
+  });
 
   final VoidCallback onPressed;
   final String? text;
   final IconData? icon;
+  final double fontSize;
+  final double iconSize;
 
   @override
   Widget build(BuildContext context) {
@@ -1706,17 +1799,17 @@ class _PinButton extends StatelessWidget {
       child: InkWell(
         onTap: onPressed,
         customBorder: const CircleBorder(),
-        splashColor: const Color(0xFF2563EB).withOpacity(0.1),
-        highlightColor: const Color(0xFF2563EB).withOpacity(0.05),
+        splashColor: const Color(0xFF2563EB).withValues(alpha: 0.1),
+        highlightColor: const Color(0xFF2563EB).withValues(alpha: 0.05),
         child: Center(
           child: icon != null
-              ? Icon(icon, color: const Color(0xFF111827), size: 28)
+              ? Icon(icon, color: const Color(0xFF111827), size: iconSize)
               : Text(
                   text!,
-                  style: const TextStyle(
-                    fontSize: 32,
+                  style: TextStyle(
+                    fontSize: fontSize,
                     fontWeight: FontWeight.w500,
-                    color: Color(0xFF111827),
+                    color: const Color(0xFF111827),
                   ),
                 ),
         ),
