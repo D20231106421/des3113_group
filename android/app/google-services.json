@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "287795643507",
+    "project_id": "des3113-group",
+    "storage_bucket": "des3113-group.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:287795643507:android:9ba061cdf4c8705635d606",
+        "android_client_info": {
+          "package_name": "com.example.des3113_group"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAr8xpg4HXWlB0csy33quPmznOe2H_pQUY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
