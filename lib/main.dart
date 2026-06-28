@@ -269,7 +269,9 @@ class CredentialStorage {
     final savedCredentials = preferences.getString(_credentialsKey);
 
     if (savedCredentials == null) {
-      return const SavedVault(credentials: <Credential>[], nextId: 1);
+      // Do NOT use const here — const creates an unmodifiable list, which would
+      // silently crash when _credentials.add() is called for new accounts.
+      return SavedVault(credentials: <Credential>[], nextId: 1);
     }
 
     final decoded = jsonDecode(savedCredentials) as List<dynamic>;
@@ -761,7 +763,9 @@ class _PasswordManagerScreenState extends State<PasswordManagerScreen> {
     if (!mounted) return;
 
     setState(() {
-      _credentials = savedVault.credentials;
+      // Always use List.of() to guarantee a growable (mutable) list,
+      // regardless of whether savedVault.credentials is const or not.
+      _credentials = List<Credential>.of(savedVault.credentials);
       _nextId = savedVault.nextId;
       _isLoading = false;
     });
