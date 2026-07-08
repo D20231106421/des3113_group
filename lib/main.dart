@@ -369,7 +369,7 @@ class PasswordManagerScreen extends StatefulWidget {
   State<PasswordManagerScreen> createState() => _PasswordManagerScreenState();
 }
 
-class _PasswordManagerScreenState extends State<PasswordManagerScreen> {
+class _PasswordManagerScreenState extends State<PasswordManagerScreen> with WidgetsBindingObserver {
   final CredentialStorage _storage = CredentialStorage();
   List<Credential> _credentials = [];
   int _nextId = 1;
@@ -399,8 +399,30 @@ class _PasswordManagerScreenState extends State<PasswordManagerScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Do NOT load vault here — the user is not authenticated yet.
     // _loadSavedVault is called from _unlockVault after auth succeeds.
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _lockVault();
+    }
+  }
+
+  void _lockVault() {
+    if (_isUnlocked) {
+      setState(() {
+        _isUnlocked = false;
+      });
+    }
   }
 
   Future<void> _signOut() async {
@@ -644,6 +666,7 @@ class _PasswordManagerScreenState extends State<PasswordManagerScreen> {
         await preferences.setString(newCredentialsKey, savedCredentials);
         await preferences.setInt(newNextIdKey, savedNextId);
       }
+      await preferences.setString('cipher_vault_pin_encrypted_$newUid', PasswordVault.encrypt(pin));
 
       // 4. Save the credentials to Firestore under the new UID
       await FirebaseFirestore.instance
@@ -669,6 +692,7 @@ class _PasswordManagerScreenState extends State<PasswordManagerScreen> {
         // Delete old local keys
         await preferences.remove(oldCredentialsKey);
         await preferences.remove(oldNextIdKey);
+        await preferences.remove('cipher_vault_pin_encrypted_$oldUid');
         // Delete old Auth user
         await FirebaseAuth.instance.currentUser?.delete();
       } catch (e) {
@@ -704,6 +728,9 @@ class _PasswordManagerScreenState extends State<PasswordManagerScreen> {
       );
       await user.reauthenticateWithCredential(credential);
       await user.updatePassword(newPin);
+
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setString('cipher_vault_pin_encrypted_${user.uid}', PasswordVault.encrypt(newPin));
       return true;
     } on FirebaseAuthException catch (e) {
       if (!mounted) return false;
@@ -726,6 +753,8 @@ class _PasswordManagerScreenState extends State<PasswordManagerScreen> {
       await user.reauthenticateWithCredential(credential);
 
       // Clear local storage first while user is still authenticated
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.remove('cipher_vault_pin_encrypted_${user.uid}');
       await _storage.clearLocal();
 
       // Delete Firestore vault
@@ -1232,7 +1261,7 @@ class _AuthGate extends StatefulWidget {
   State<_AuthGate> createState() => _AuthGateState();
 }
 
-class _AuthGateState extends State<_AuthGate> {
+class _AuthGateState extends State<_AuthGate> with WidgetsBindingObserver {
   AuthGateMode _mode = AuthGateMode.checkingAuth;
   final _usernameController = TextEditingController();
   String _enteredPin = '';
@@ -1243,20 +1272,40 @@ class _AuthGateState extends State<_AuthGate> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _checkExistingSession();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _usernameController.dispose();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      if (mounted) {
+        setState(() {
+          _enteredPin = '';
+          _errorMessage = '';
+        });
+      }
+    }
+  }
+
   Future<void> _checkExistingSession() async {
-    // If already signed in from a previous session, unlock immediately.
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      widget.onUnlock();
+      final email = user.email ?? '';
+      final username = email.replaceAll('@ciphervault.app', '');
+      _usernameController.text = username;
+      if (mounted) {
+        setState(() {
+          _mode = AuthGateMode.loggingIn;
+        });
+      }
       return;
     }
     if (mounted) setState(() => _mode = AuthGateMode.login);
@@ -1321,6 +1370,27 @@ class _AuthGateState extends State<_AuthGate> {
         });
       }
     } else if (_mode == AuthGateMode.loggingIn) {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        setState(() => _isProcessing = true);
+        final preferences = await SharedPreferences.getInstance();
+        final storedPinEncrypted = preferences.getString('cipher_vault_pin_encrypted_${user.uid}');
+        if (storedPinEncrypted != null) {
+          final enteredPinEncrypted = PasswordVault.encrypt(_enteredPin);
+          if (storedPinEncrypted == enteredPinEncrypted) {
+            setState(() => _isProcessing = false);
+            widget.onUnlock();
+            return;
+          } else {
+            setState(() {
+              _errorMessage = 'Incorrect PIN. Please try again.';
+              _enteredPin = '';
+              _isProcessing = false;
+            });
+            return;
+          }
+        }
+      }
       await _signIn(_enteredPin);
     }
   }
@@ -1333,6 +1403,11 @@ class _AuthGateState extends State<_AuthGate> {
         email: email,
         password: pin,
       );
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final preferences = await SharedPreferences.getInstance();
+        await preferences.setString('cipher_vault_pin_encrypted_${user.uid}', PasswordVault.encrypt(pin));
+      }
       widget.onUnlock();
     } on FirebaseAuthException catch (e) {
       String msg;
@@ -1361,6 +1436,11 @@ class _AuthGateState extends State<_AuthGate> {
         email: email,
         password: pin,
       );
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final preferences = await SharedPreferences.getInstance();
+        await preferences.setString('cipher_vault_pin_encrypted_${user.uid}', PasswordVault.encrypt(pin));
+      }
       widget.onUnlock();
     } on FirebaseAuthException catch (e) {
       String msg;
@@ -1741,7 +1821,10 @@ class _AuthGateState extends State<_AuthGate> {
 
                           // Navigation links
                           TextButton(
-                            onPressed: () {
+                            onPressed: () async {
+                              if (FirebaseAuth.instance.currentUser != null) {
+                                await FirebaseAuth.instance.signOut();
+                              }
                               setState(() {
                                 _enteredPin = '';
                                 _setupPin1 = '';
@@ -1754,7 +1837,12 @@ class _AuthGateState extends State<_AuthGate> {
                           ),
                           if (_mode == AuthGateMode.loggingIn)
                             TextButton(
-                              onPressed: _switchToSignup,
+                              onPressed: () async {
+                                if (FirebaseAuth.instance.currentUser != null) {
+                                  await FirebaseAuth.instance.signOut();
+                                }
+                                _switchToSignup();
+                              },
                               child:
                                   const Text('Create a new account instead'),
                             ),
